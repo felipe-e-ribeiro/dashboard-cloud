@@ -84,7 +84,7 @@ describe("Service drill-down", () => {
     await user.click(await screen.findByRole("row", { name: /EC2/ }));
 
     expect(await screen.findByText("EC2", { selector: ".service-detail-name" })).toBeInTheDocument();
-    expect(screen.getByText("USD 80.00")).toBeInTheDocument();
+    expect(screen.getByText("$80.00", { selector: ".service-detail-total" })).toBeInTheDocument();
     expect(screen.getByText("80% do custo total do período")).toBeInTheDocument();
     expect(await screen.findByTestId("service-detail-chart")).toBeInTheDocument();
   });

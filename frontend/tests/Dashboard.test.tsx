@@ -67,7 +67,7 @@ describe("Dashboard", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("tab", { name: "AWS" }));
 
-    expect(await screen.findByText(/Total: USD 42/)).toBeInTheDocument();
+    expect(await screen.findByText(/Total: \$42\.00/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Oracle Cloud" }));
 

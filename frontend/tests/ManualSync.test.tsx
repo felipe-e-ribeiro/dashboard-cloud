@@ -100,7 +100,7 @@ describe("Manual sync button", () => {
     // The component polls /api/sync/status every 3s (POLL_INTERVAL_MS) using real timers;
     // two poll cycles are needed here (running, then success), so allow enough real time.
     expect(await screen.findByRole("button", { name: "Sincronizar agora" }, { timeout: 10000 })).not.toBeDisabled();
-    expect(await screen.findByText(/Total: USD 42/)).toBeInTheDocument();
+    expect(await screen.findByText(/Total: \$42\.00/)).toBeInTheDocument();
   }, 15000);
 
   it("shows a message when the trigger is rejected (409) and leaves the button usable", async () => {

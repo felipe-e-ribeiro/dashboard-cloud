@@ -35,6 +35,13 @@ class CostRecord(Base):
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
 
+class ExchangeRate(Base):
+    __tablename__ = "exchange_rates"
+
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    rate: Mapped[float] = mapped_column(Numeric(10, 4))
+
+
 class SyncRun(Base):
     __tablename__ = "sync_runs"
 

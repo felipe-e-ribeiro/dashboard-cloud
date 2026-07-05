@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 import { Provider, ServiceTrendPoint, api } from "../api/client";
-import { formatChangePct } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
+import { formatChangePct, formatMoney } from "../utils/format";
 
 interface Props {
   provider: Provider;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function ServiceDetailPanel({ provider, serviceName, serviceAmount, providerTotal, currency }: Props) {
+  const { currency: requestCurrency } = useCurrency();
   const [points, setPoints] = useState<ServiceTrendPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function ServiceDetailPanel({ provider, serviceName, serviceAmount, provi
     setError(null);
 
     api
-      .serviceTrend(provider, serviceName, 6)
+      .serviceTrend(provider, serviceName, 6, requestCurrency)
       .then((result) => {
         if (!cancelled) setPoints(result.points);
       })
@@ -42,7 +44,7 @@ export function ServiceDetailPanel({ provider, serviceName, serviceAmount, provi
     return () => {
       cancelled = true;
     };
-  }, [provider, serviceName]);
+  }, [provider, serviceName, requestCurrency]);
 
   if (!serviceName) {
     return (
@@ -63,9 +65,7 @@ export function ServiceDetailPanel({ provider, serviceName, serviceAmount, provi
     <div className="service-detail">
       <div className="service-detail-label">Detalhe do serviço</div>
       <div className="service-detail-name">{serviceName}</div>
-      <div className="service-detail-total">
-        {currency} {(serviceAmount ?? 0).toFixed(2)}
-      </div>
+      <div className="service-detail-total">{formatMoney(serviceAmount ?? 0, currency)}</div>
       <div className="service-detail-share">{sharePct.toFixed(0)}% do custo total do período</div>
 
       {loading && <p>Carregando...</p>}

@@ -1,5 +1,6 @@
 export type Provider = "aws" | "oci";
 export type Period = "current_month" | "last_6_months";
+export type Currency = "usd" | "brl";
 
 export interface TrendPoint {
   usage_date: string;
@@ -95,13 +96,13 @@ export const api = {
     }),
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
   me: () => request<CurrentUser>("/auth/me"),
-  costSummary: (provider: Provider, period: Period) =>
-    request<CostSummary>(`/api/costs/summary?provider=${provider}&period=${period}`),
-  costBreakdown: (provider: Provider, period: Period) =>
-    request<CostBreakdown>(`/api/costs/breakdown?provider=${provider}&period=${period}`),
-  serviceTrend: (provider: Provider, serviceName: string, months = 6) =>
+  costSummary: (provider: Provider, period: Period, currency: Currency = "usd") =>
+    request<CostSummary>(`/api/costs/summary?provider=${provider}&period=${period}&currency=${currency}`),
+  costBreakdown: (provider: Provider, period: Period, currency: Currency = "usd") =>
+    request<CostBreakdown>(`/api/costs/breakdown?provider=${provider}&period=${period}&currency=${currency}`),
+  serviceTrend: (provider: Provider, serviceName: string, months = 6, currency: Currency = "usd") =>
     request<ServiceTrend>(
-      `/api/costs/service-trend?provider=${provider}&service_name=${encodeURIComponent(serviceName)}&months=${months}`,
+      `/api/costs/service-trend?provider=${provider}&service_name=${encodeURIComponent(serviceName)}&months=${months}&currency=${currency}`,
     ),
   syncStatus: (provider: Provider) => request<SyncStatus>(`/api/sync/status?provider=${provider}`),
   triggerSync: (provider: Provider) =>

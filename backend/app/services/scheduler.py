@@ -1,6 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from ..database import SessionLocal
+from .fx import sync_fx_rates
 from .sync import sync_all
 
 scheduler = BackgroundScheduler()
@@ -10,6 +11,7 @@ def run_daily_sync() -> None:
     db = SessionLocal()
     try:
         sync_all(db)
+        sync_fx_rates(db)
     finally:
         db.close()
 

@@ -1,5 +1,5 @@
 import { TrendPoint } from "../api/client";
-import { formatChangePct } from "../utils/format";
+import { formatChangePct, formatMoney } from "../utils/format";
 import { TrendChart } from "./TrendChart";
 
 interface Props {
@@ -33,9 +33,7 @@ export function ProviderSummaryCard({
       tabIndex={onClick ? 0 : undefined}
     >
       <div className="summary-card-label">{label}</div>
-      <div className="summary-card-total">
-        {currency} {total.toFixed(2)}
-      </div>
+      <div className="summary-card-total">{formatMoney(total, currency)}</div>
       {change && <div className={`change-badge change-${change.direction}`}>{change.text}</div>}
       {trend && trend.length > 0 && (
         <div className="summary-card-trend">

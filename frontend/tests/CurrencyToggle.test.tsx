@@ -1,36 +1,39 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/App";
 
-function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400) {
-  return { ok, status, json: async () => body } as Response;
+function jsonResponse(body: unknown, ok = true) {
+  return { ok, status: ok ? 200 : 400, json: async () => body } as Response;
 }
 
 function urlOf(input: RequestInfo | URL): string {
   return typeof input === "string" ? input : input.toString();
 }
 
-describe("Overview tab", () => {
+describe("Currency toggle", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    window.localStorage.clear();
   });
 
-  it("shows the combined total and a card per provider", async () => {
+  it("refetches with currency=brl and displays the converted values", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = urlOf(input);
       if (url.includes("/auth/me")) {
         return Promise.resolve(jsonResponse({ id: 1, username: "admin", auth_provider: "local" }));
       }
       if (url.includes("/api/costs/summary")) {
-        const provider = url.includes("provider=oci") ? "oci" : "aws";
-        const total = provider === "aws" ? 100 : 20;
+        const isBrl = url.includes("currency=brl");
+        const isOci = url.includes("provider=oci");
+        const total = isOci ? (isBrl ? 100 : 50) : isBrl ? 550 : 100;
         return Promise.resolve(
           jsonResponse({
-            provider,
+            provider: isOci ? "oci" : "aws",
             period: "current_month",
-            currency: "USD",
+            currency: isBrl ? "BRL" : "USD",
             total,
             previous_total: total,
             change_pct: 0,
@@ -48,28 +51,33 @@ describe("Overview tab", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("$120.00")).toBeInTheDocument();
-    expect(screen.getByText("$100.00")).toBeInTheDocument();
-    expect(screen.getByText("$20.00")).toBeInTheDocument();
+    // Combined total: AWS (100) + OCI (50) in USD.
+    expect(await screen.findByText("$150.00")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Mudar para Real" }));
+
+    // Combined total: AWS (550) + OCI (100) in BRL.
+    expect(await screen.findByText("R$ 650,00")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("currency=brl"), expect.anything());
   });
 
-  it("shows an error only for the provider whose request failed", async () => {
+  it("persists the currency choice across reloads", async () => {
+    window.localStorage.setItem("currency", "brl");
+
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = urlOf(input);
       if (url.includes("/auth/me")) {
         return Promise.resolve(jsonResponse({ id: 1, username: "admin", auth_provider: "local" }));
       }
       if (url.includes("/api/costs/summary")) {
-        if (url.includes("provider=oci")) {
-          return Promise.resolve(jsonResponse({ detail: "boom" }, false, 500));
-        }
         return Promise.resolve(
           jsonResponse({
             provider: "aws",
             period: "current_month",
-            currency: "USD",
-            total: 50,
-            previous_total: 50,
+            currency: "BRL",
+            total: 10,
+            previous_total: 10,
             change_pct: 0,
             trend: [],
           }),
@@ -85,9 +93,6 @@ describe("Overview tab", () => {
       </MemoryRouter>,
     );
 
-    // Combined total equals the AWS card's total here because the OCI request failed
-    // (nothing to add), so both the combined KPI and the AWS card render "$50.00".
-    expect(await screen.findAllByText("$50.00")).toHaveLength(2);
-    expect(screen.getByText("Não foi possível carregar os custos de Oracle Cloud.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Mudar para Dólar" })).toBeInTheDocument();
   });
 });

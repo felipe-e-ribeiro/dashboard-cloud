@@ -1,3 +1,19 @@
+const LOCALE_BY_CURRENCY: Record<string, string> = {
+  USD: "en-US",
+  BRL: "pt-BR",
+};
+
+export function formatMoney(amount: number, currency: string): string {
+  const normalized = currency.toUpperCase();
+  const locale = LOCALE_BY_CURRENCY[normalized] ?? "en-US";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: normalized,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 export interface ChangeDisplay {
   text: string;
   direction: "up" | "down" | "flat";

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, CostBreakdown, CostSummary, Period, Provider, SyncStatus, api } from "../api/client";
-import { formatChangePct } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
+import { formatChangePct, formatMoney } from "../utils/format";
 import { BreakdownTable } from "./BreakdownTable";
 import { PeriodSelector } from "./PeriodSelector";
 import { ServiceDetailPanel } from "./ServiceDetailPanel";
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function ProviderPanel({ provider }: Props) {
+  const { currency } = useCurrency();
   const [period, setPeriod] = useState<Period>("current_month");
   const [summary, setSummary] = useState<CostSummary | null>(null);
   const [breakdown, setBreakdown] = useState<CostBreakdown | null>(null);
@@ -30,7 +32,11 @@ export function ProviderPanel({ provider }: Props) {
     setLoading(true);
     setError(null);
 
-    return Promise.all([api.costSummary(provider, period), api.costBreakdown(provider, period), api.syncStatus(provider)])
+    return Promise.all([
+      api.costSummary(provider, period, currency),
+      api.costBreakdown(provider, period, currency),
+      api.syncStatus(provider),
+    ])
       .then(([summaryRes, breakdownRes, statusRes]) => {
         setSummary(summaryRes);
         setBreakdown(breakdownRes);
@@ -43,7 +49,7 @@ export function ProviderPanel({ provider }: Props) {
         return null;
       })
       .finally(() => setLoading(false));
-  }, [provider, period]);
+  }, [provider, period, currency]);
 
   useEffect(() => {
     setTriggerError(null);
@@ -116,9 +122,7 @@ export function ProviderPanel({ provider }: Props) {
             <div className="provider-total-label">
               Total {provider.toUpperCase()} · {period === "current_month" ? "mês atual" : "últimos 6 meses"}
             </div>
-            <div className="provider-total-amount">
-              Total: {summary.currency} {summary.total.toFixed(2)}
-            </div>
+            <div className="provider-total-amount">Total: {formatMoney(summary.total, summary.currency)}</div>
             {change && <div className={`change-badge change-${change.direction}`}>{change.text}</div>}
           </div>
           <TrendChart trend={summary.trend} />
@@ -129,6 +133,7 @@ export function ProviderPanel({ provider }: Props) {
         <div className="provider-body">
           <BreakdownTable
             items={breakdown.items}
+            currency={breakdown.currency}
             selectedService={selectedService}
             onSelect={setSelectedService}
           />

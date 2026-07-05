@@ -17,6 +17,7 @@ from ..schemas import (
     SyncTriggerResponse,
     TrendPoint,
 )
+from ..services import fx
 from ..services import sync as sync_service
 from ..services.periods import VALID_PERIODS, months_ago_start, period_range, previous_period_range
 
@@ -26,26 +27,20 @@ DEFAULT_SERVICE_TREND_MONTHS = 6
 router = APIRouter(prefix="/api", tags=["costs"])
 
 VALID_PROVIDERS = {"aws", "oci"}
+VALID_CURRENCIES = {"usd", "brl"}
 
 
-def _validate(provider: str, period: str) -> None:
+def _validate(provider: str, period: str, currency: str = "usd") -> None:
     if provider not in VALID_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
     if period not in VALID_PERIODS:
         raise HTTPException(status_code=400, detail=f"Invalid period: {period}")
+    if currency not in VALID_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"Invalid currency: {currency}")
 
 
-@router.get("/costs/summary", response_model=CostSummary)
-def cost_summary(
-    provider: str = Query(...),
-    period: str = Query(...),
-    db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
-):
-    _validate(provider, period)
-    start, end = period_range(period)
-
-    rows = (
+def _daily_totals(db: Session, provider: str, start, end) -> list[tuple]:
+    return (
         db.query(CostRecord.usage_date, func.sum(CostRecord.amount))
         .filter(
             CostRecord.provider == provider,
@@ -56,27 +51,36 @@ def cost_summary(
         .order_by(CostRecord.usage_date)
         .all()
     )
-    trend = [TrendPoint(usage_date=usage_date, amount=float(amount)) for usage_date, amount in rows]
-    total = sum(point.amount for point in trend)
 
+
+@router.get("/costs/summary", response_model=CostSummary)
+def cost_summary(
+    provider: str = Query(...),
+    period: str = Query(...),
+    currency: str = Query("usd"),
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    _validate(provider, period, currency)
+    start, end = period_range(period)
+
+    daily_rows = [(d, float(amount)) for d, amount in _daily_totals(db, provider, start, end)]
     previous_start, previous_end = previous_period_range(period)
-    previous_total = (
-        db.query(func.sum(CostRecord.amount))
-        .filter(
-            CostRecord.provider == provider,
-            CostRecord.usage_date >= previous_start,
-            CostRecord.usage_date <= previous_end,
-        )
-        .scalar()
-        or 0.0
-    )
-    previous_total = float(previous_total)
+    previous_daily_rows = [(d, float(amount)) for d, amount in _daily_totals(db, provider, previous_start, previous_end)]
+
+    if currency == "brl":
+        daily_rows = fx.convert_to_brl(db, daily_rows)
+        previous_daily_rows = fx.convert_to_brl(db, previous_daily_rows)
+
+    trend = [TrendPoint(usage_date=d, amount=amount) for d, amount in daily_rows]
+    total = sum(point.amount for point in trend)
+    previous_total = sum(amount for _, amount in previous_daily_rows)
     change_pct = ((total - previous_total) / previous_total * 100) if previous_total else None
 
     return CostSummary(
         provider=provider,
         period=period,
-        currency="USD",
+        currency=currency.upper(),
         total=total,
         previous_total=previous_total,
         change_pct=change_pct,
@@ -88,26 +92,40 @@ def cost_summary(
 def cost_breakdown(
     provider: str = Query(...),
     period: str = Query(...),
+    currency: str = Query("usd"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    _validate(provider, period)
+    _validate(provider, period, currency)
     start, end = period_range(period)
 
     rows = (
-        db.query(CostRecord.service_name, func.sum(CostRecord.amount).label("total"))
+        db.query(CostRecord.usage_date, CostRecord.service_name, CostRecord.amount)
         .filter(
             CostRecord.provider == provider,
             CostRecord.usage_date >= start,
             CostRecord.usage_date <= end,
         )
-        .group_by(CostRecord.service_name)
-        .order_by(func.sum(CostRecord.amount).desc())
         .all()
     )
-    items = [BreakdownItem(service_name=service_name, amount=float(total)) for service_name, total in rows]
 
-    return CostBreakdown(provider=provider, period=period, currency="USD", items=items)
+    if currency == "brl":
+        converted = fx.convert_to_brl(db, [(usage_date, float(amount)) for usage_date, _, amount in rows])
+        rows = [
+            (usage_date, service_name, converted_amount)
+            for (usage_date, service_name, _), (_, converted_amount) in zip(rows, converted)
+        ]
+
+    totals_by_service: dict[str, float] = defaultdict(float)
+    for _, service_name, amount in rows:
+        totals_by_service[service_name] += float(amount)
+
+    items = [
+        BreakdownItem(service_name=service_name, amount=amount)
+        for service_name, amount in sorted(totals_by_service.items(), key=lambda item: item[1], reverse=True)
+    ]
+
+    return CostBreakdown(provider=provider, period=period, currency=currency.upper(), items=items)
 
 
 @router.get("/costs/service-trend", response_model=ServiceTrend)
@@ -115,11 +133,14 @@ def service_trend(
     provider: str = Query(...),
     service_name: str = Query(...),
     months: int = Query(DEFAULT_SERVICE_TREND_MONTHS),
+    currency: str = Query("usd"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
     if provider not in VALID_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
+    if currency not in VALID_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"Invalid currency: {currency}")
 
     start = months_ago_start(months)
 
@@ -132,15 +153,19 @@ def service_trend(
         )
         .all()
     )
+    daily_rows = [(usage_date, float(amount)) for usage_date, amount in rows]
+
+    if currency == "brl":
+        daily_rows = fx.convert_to_brl(db, daily_rows)
 
     totals_by_month: dict[str, float] = defaultdict(float)
-    for usage_date, amount in rows:
+    for usage_date, amount in daily_rows:
         month_key = f"{usage_date.year:04d}-{usage_date.month:02d}"
-        totals_by_month[month_key] += float(amount)
+        totals_by_month[month_key] += amount
 
     points = [ServiceTrendPoint(month=month, amount=amount) for month, amount in sorted(totals_by_month.items())]
 
-    return ServiceTrend(provider=provider, service_name=service_name, currency="USD", points=points)
+    return ServiceTrend(provider=provider, service_name=service_name, currency=currency.upper(), points=points)
 
 
 @router.get("/sync/status", response_model=SyncStatus)

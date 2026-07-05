@@ -1,12 +1,14 @@
 import { BreakdownItem } from "../api/client";
+import { formatMoney } from "../utils/format";
 
 interface Props {
   items: BreakdownItem[];
+  currency: string;
   selectedService: string | null;
   onSelect: (serviceName: string) => void;
 }
 
-export function BreakdownTable({ items, selectedService, onSelect }: Props) {
+export function BreakdownTable({ items, currency, selectedService, onSelect }: Props) {
   if (items.length === 0) {
     return <p className="empty-state">Nenhum custo por serviço no período.</p>;
   }
@@ -28,7 +30,7 @@ export function BreakdownTable({ items, selectedService, onSelect }: Props) {
           onClick={() => onSelect(item.service_name)}
         >
           <span>{item.service_name}</span>
-          <span>{item.amount.toFixed(2)}</span>
+          <span>{formatMoney(item.amount, currency)}</span>
         </button>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { CostSummary, Provider, api } from "../api/client";
+import { useCurrency } from "../context/CurrencyContext";
 import { PROVIDERS } from "./ProviderTabs";
 import { ProviderSummaryCard } from "./ProviderSummaryCard";
 
@@ -14,6 +15,7 @@ type SummaryState = Partial<Record<Provider, CostSummary>>;
 type ErrorState = Partial<Record<Provider, boolean>>;
 
 export function OverviewPanel({ onSelectProvider }: Props) {
+  const { currency: requestCurrency } = useCurrency();
   const [summaries, setSummaries] = useState<SummaryState>({});
   const [errors, setErrors] = useState<ErrorState>({});
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,7 @@ export function OverviewPanel({ onSelectProvider }: Props) {
     Promise.all(
       PROVIDERS.map(({ key }) =>
         api
-          .costSummary(key, OVERVIEW_PERIOD)
+          .costSummary(key, OVERVIEW_PERIOD, requestCurrency)
           .then((summary) => ({ key, summary, failed: false }) as const)
           .catch(() => ({ key, summary: null, failed: true }) as const),
       ),
@@ -45,7 +47,7 @@ export function OverviewPanel({ onSelectProvider }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestCurrency]);
 
   if (loading) return <p>Carregando...</p>;
 

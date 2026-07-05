@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from app.models import CostRecord, SyncRun
+from app.models import CostRecord, ExchangeRate, SyncRun
 
 
 def _login(client):
@@ -175,3 +175,80 @@ def test_service_trend_invalid_provider_rejected(client):
         "/api/costs/service-trend", params={"provider": "gcp", "service_name": "EC2", "months": 6}
     )
     assert response.status_code == 400
+
+
+def test_invalid_currency_rejected(client):
+    _login(client)
+    response = client.get(
+        "/api/costs/summary", params={"provider": "aws", "period": "current_month", "currency": "eur"}
+    )
+    assert response.status_code == 400
+
+
+def test_summary_converts_to_brl_using_each_day_own_rate(client, db_session):
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=yesterday, amount=10.0, currency="USD"))
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=today, amount=20.0, currency="USD"))
+    db_session.add(ExchangeRate(date=yesterday, rate=5.0))
+    db_session.add(ExchangeRate(date=today, rate=5.5))
+    db_session.commit()
+
+    _login(client)
+    response = client.get(
+        "/api/costs/summary", params={"provider": "aws", "period": "current_month", "currency": "brl"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["currency"] == "BRL"
+    assert body["total"] == 10.0 * 5.0 + 20.0 * 5.5
+    trend_by_date = {p["usage_date"]: p["amount"] for p in body["trend"]}
+    assert trend_by_date[yesterday.isoformat()] == 50.0
+    assert trend_by_date[today.isoformat()] == 110.0
+
+
+def test_breakdown_converts_to_brl_per_day(client, db_session):
+    today = date.today()
+    db_session.add(CostRecord(provider="oci", service_name="Compute", usage_date=today, amount=8.0, currency="USD"))
+    db_session.add(
+        CostRecord(provider="oci", service_name="Object Storage", usage_date=today, amount=2.0, currency="USD")
+    )
+    db_session.add(ExchangeRate(date=today, rate=5.0))
+    db_session.commit()
+
+    _login(client)
+    response = client.get(
+        "/api/costs/breakdown", params={"provider": "oci", "period": "current_month", "currency": "brl"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["currency"] == "BRL"
+    items = {item["service_name"]: item["amount"] for item in body["items"]}
+    assert items == {"Compute": 40.0, "Object Storage": 10.0}
+
+
+def test_service_trend_converts_to_brl_with_carry_forward(client, db_session):
+    today = date.today()
+    last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=today, amount=10.0, currency="USD"))
+    db_session.add(
+        CostRecord(provider="aws", service_name="EC2", usage_date=last_month, amount=4.0, currency="USD")
+    )
+    # No rate stored for `today` or `last_month` themselves; only an earlier one to carry forward.
+    db_session.add(ExchangeRate(date=last_month - timedelta(days=1), rate=5.0))
+    db_session.commit()
+
+    _login(client)
+    response = client.get(
+        "/api/costs/service-trend",
+        params={"provider": "aws", "service_name": "EC2", "months": 6, "currency": "brl"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["currency"] == "BRL"
+    points = {p["month"]: p["amount"] for p in body["points"]}
+    assert points[f"{today.year:04d}-{today.month:02d}"] == 50.0
+    assert points[f"{last_month.year:04d}-{last_month.month:02d}"] == 20.0

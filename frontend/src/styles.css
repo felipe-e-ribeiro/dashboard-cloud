@@ -142,7 +142,8 @@ input {
   color: var(--color-accent);
 }
 
-.theme-toggle {
+.theme-toggle,
+.currency-toggle {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text-muted);
@@ -150,6 +151,11 @@ input {
   padding: 0.3rem 0.7rem;
   font-size: 0.8rem;
   cursor: pointer;
+}
+
+.currency-toggle {
+  font-weight: 600;
+  color: var(--color-accent);
 }
 
 .sync-logs-table {
