@@ -5,7 +5,7 @@ API de leitura (totais/tendência/breakdown por serviço, por cloud e período) 
 ## Requirements
 
 ### Requirement: Cost summary API
-The system SHALL provide an endpoint returning the total cost and a trend series for a given provider (`aws` or `oci`) and period (`current_month` or `last_6_months`), reading exclusively from persisted `cost_records` (no live call to AWS/OCI APIs at request time).
+The system SHALL provide an endpoint returning the total cost, a trend series, and the period-over-period change for a given provider (`aws` or `oci`) and period (`current_month` or `last_6_months`), reading exclusively from persisted `cost_records` (no live call to AWS/OCI APIs at request time).
 
 #### Scenario: Summary for current month
 - **WHEN** an authenticated request asks for the AWS summary with period `current_month`
@@ -14,6 +14,14 @@ The system SHALL provide an endpoint returning the total cost and a trend series
 #### Scenario: Summary is served even if the last sync failed
 - **WHEN** the most recent `sync_runs` entry for a provider has status `failed`
 - **THEN** the summary endpoint still returns the last persisted cost data for that provider instead of an error
+
+#### Scenario: Summary includes period-over-period change
+- **WHEN** an authenticated request asks for a provider's summary for a given period
+- **THEN** the system also returns `previous_total` (the total for the immediately preceding period of equal length) and `change_pct` (the percentage change from `previous_total` to `total`)
+
+#### Scenario: No data in the previous period
+- **WHEN** the immediately preceding period has no `cost_records` for that provider
+- **THEN** the system returns `previous_total: 0` and `change_pct: null` instead of raising an error or dividing by zero
 
 ### Requirement: Cost breakdown API
 The system SHALL provide an endpoint returning cost grouped by service name for a given provider and period.
@@ -30,12 +38,64 @@ The system SHALL provide an endpoint returning the most recent sync timestamp an
 - **THEN** the system returns the timestamp and status (`success` or `failed`) of the most recent AWS `sync_runs` entry
 
 ### Requirement: Dashboard tabs per cloud
-The frontend SHALL present the AWS and Oracle Cloud cost views as separate tabs within the authenticated dashboard, each showing a trend chart, a service breakdown table, a period selector (current month / last 6 months), and a last-sync indicator.
+The frontend SHALL present the AWS and Oracle Cloud cost views as separate tabs within the authenticated dashboard, each showing the period total (with its period-over-period change) above a trend chart and a service breakdown table, a period selector (current month / last 6 months), and a last-sync indicator.
 
 #### Scenario: Switching tabs shows the matching provider's data
 - **WHEN** the user selects the "Oracle Cloud" tab
-- **THEN** the dashboard displays OCI's trend chart, breakdown table, and last-sync indicator for the selected period
+- **THEN** the dashboard displays OCI's total, trend chart, breakdown table, and last-sync indicator for the selected period
 
 #### Scenario: Failed last sync shows a warning
 - **WHEN** the sync status for the active tab's provider is `failed`
 - **THEN** the dashboard shows a non-blocking warning alongside the (possibly stale) cost data already displayed
+
+#### Scenario: Total is shown above the trend and breakdown
+- **WHEN** the user views the AWS or Oracle Cloud tab
+- **THEN** the period total and its period-over-period change are the first cost information visible, above the trend chart and the breakdown table
+
+### Requirement: Service trend API
+The system SHALL provide an endpoint returning the monthly total cost of a single service, for a given provider and service name, over the last N closed months plus the current month (N defaulting to 6), reading exclusively from persisted `cost_records`.
+
+#### Scenario: Monthly totals for a service
+- **WHEN** an authenticated request asks for the AWS service trend for service `EC2` with `months=6`
+- **THEN** the system returns the total EC2 cost for each of the last 6 closed months plus the current month, ordered oldest first
+
+#### Scenario: Service with no recorded cost
+- **WHEN** an authenticated request asks for the service trend of a `service_name` with no matching `cost_records` in the requested range
+- **THEN** the system returns an empty list instead of an error
+
+### Requirement: Dashboard overview tab
+The frontend SHALL present a combined "Overview" tab, shown before the AWS and Oracle Cloud tabs, displaying the combined total cost across both providers (with its period-over-period change) and a summary card per provider (each showing that provider's total and a trend indicator).
+
+#### Scenario: Overview shows combined total and per-provider cards
+- **WHEN** the user selects the "Overview" tab
+- **THEN** the dashboard displays the sum of the AWS and Oracle Cloud totals with its period-over-period change, and one summary card per provider
+
+#### Scenario: One provider fails to load
+- **WHEN** the cost summary request for one provider fails while the other succeeds
+- **THEN** the Overview tab shows the successfully loaded provider's card and an error state for the other, without blocking the combined total from being shown as unavailable
+
+#### Scenario: No drill-down from the overview
+- **WHEN** the user is on the "Overview" tab
+- **THEN** clicking a provider's summary card navigates to that provider's tab, and no per-service detail is shown within the Overview tab itself
+
+### Requirement: Per-service drill-down
+The frontend SHALL allow the user to select a service row in a provider's breakdown table to view that service's monthly cost history for the last 6 closed months plus the current month, alongside its period-over-period change.
+
+#### Scenario: Selecting a service shows its monthly history
+- **WHEN** the user clicks a service row in the AWS or Oracle Cloud breakdown table
+- **THEN** the dashboard displays a detail panel with that service's name, its cost and share of the provider's total for the selected period, and a bar chart of its monthly totals for the last 6 closed months plus the current month with the change versus the previous month
+
+#### Scenario: No service selected yet
+- **WHEN** the user has not clicked any service row
+- **THEN** the detail panel shows an empty/placeholder state instead of any service's data
+
+### Requirement: Light/dark theme
+The frontend SHALL support both a light and a dark visual theme across all authenticated and unauthenticated pages, defaulting to the browser's `prefers-color-scheme` setting, with a manual toggle that overrides and persists the user's choice across sessions.
+
+#### Scenario: First visit follows system preference
+- **WHEN** a user with no previously saved theme preference loads any page
+- **THEN** the page renders in the theme matching the browser's `prefers-color-scheme` setting
+
+#### Scenario: Manual override persists
+- **WHEN** the user toggles the theme manually
+- **THEN** the selected theme is applied immediately and used on subsequent visits, regardless of the browser's `prefers-color-scheme` setting
