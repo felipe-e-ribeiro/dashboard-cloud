@@ -31,7 +31,15 @@ describe("Manual sync button", () => {
       }
       if (url.includes("/api/costs/summary")) {
         return Promise.resolve(
-          jsonResponse({ provider: "aws", period: "current_month", currency: "USD", total, trend: [] }),
+          jsonResponse({
+            provider: "aws",
+            period: "current_month",
+            currency: "USD",
+            total,
+            previous_total: 0,
+            change_pct: null,
+            trend: [],
+          }),
         );
       }
       if (url.includes("/api/costs/breakdown")) {
@@ -81,8 +89,10 @@ describe("Manual sync button", () => {
       </MemoryRouter>,
     );
 
-    const button = await screen.findByRole("button", { name: "Sincronizar agora" });
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "AWS" }));
+
+    const button = await screen.findByRole("button", { name: "Sincronizar agora" });
     await user.click(button);
 
     expect(await screen.findByRole("button", { name: "Sincronizando..." })).toBeDisabled();
@@ -103,7 +113,15 @@ describe("Manual sync button", () => {
       }
       if (url.includes("/api/costs/summary")) {
         return Promise.resolve(
-          jsonResponse({ provider: "aws", period: "current_month", currency: "USD", total: 0, trend: [] }),
+          jsonResponse({
+            provider: "aws",
+            period: "current_month",
+            currency: "USD",
+            total: 0,
+            previous_total: 0,
+            change_pct: null,
+            trend: [],
+          }),
         );
       }
       if (url.includes("/api/costs/breakdown")) {
@@ -129,8 +147,10 @@ describe("Manual sync button", () => {
       </MemoryRouter>,
     );
 
-    const button = await screen.findByRole("button", { name: "Sincronizar agora" });
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "AWS" }));
+
+    const button = await screen.findByRole("button", { name: "Sincronizar agora" });
     await user.click(button);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

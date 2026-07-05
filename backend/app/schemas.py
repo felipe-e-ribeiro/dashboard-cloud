@@ -26,7 +26,21 @@ class CostSummary(BaseModel):
     period: str
     currency: str
     total: float
+    previous_total: float
+    change_pct: float | None
     trend: list[TrendPoint]
+
+
+class ServiceTrendPoint(BaseModel):
+    month: str
+    amount: float
+
+
+class ServiceTrend(BaseModel):
+    provider: str
+    service_name: str
+    currency: str
+    points: list[ServiceTrendPoint]
 
 
 class BreakdownItem(BaseModel):

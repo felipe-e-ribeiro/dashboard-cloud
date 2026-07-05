@@ -5,15 +5,23 @@ export const PROVIDERS: { key: Provider; label: string }[] = [
   { key: "oci", label: "Oracle Cloud" },
 ];
 
-interface Props {
-  active: Provider;
-  onChange: (provider: Provider) => void;
+interface Tab<T extends string> {
+  key: T;
+  label: string;
 }
 
-export function ProviderTabs({ active, onChange }: Props) {
+interface Props<T extends string> {
+  tabs?: Tab<T>[];
+  active: T;
+  onChange: (key: T) => void;
+}
+
+export function ProviderTabs<T extends string>({ tabs, active, onChange }: Props<T>) {
+  const items = tabs ?? (PROVIDERS as unknown as Tab<T>[]);
+
   return (
     <div className="tabs" role="tablist">
-      {PROVIDERS.map(({ key, label }) => (
+      {items.map(({ key, label }) => (
         <button
           key={key}
           role="tab"

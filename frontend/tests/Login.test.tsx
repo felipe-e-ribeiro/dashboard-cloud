@@ -9,6 +9,10 @@ function jsonResponse(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 401, json: async () => body } as Response;
 }
 
+function urlOf(input: RequestInfo | URL): string {
+  return typeof input === "string" ? input : input.toString();
+}
+
 describe("Login flow", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -37,18 +41,46 @@ describe("Login flow", () => {
   });
 
   it("logs in successfully and redirects to the dashboard", async () => {
-    const fetchMock = vi.fn();
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({}, false)) // initial /auth/me (not logged in)
-      .mockResolvedValueOnce(jsonResponse({ status: "ok" })) // login
-      .mockResolvedValueOnce(jsonResponse({ id: 1, username: "admin", auth_provider: "local" })) // /auth/me after login
-      .mockResolvedValueOnce(
-        jsonResponse({ provider: "aws", period: "current_month", currency: "USD", total: 0, trend: [] }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ provider: "aws", period: "current_month", currency: "USD", items: [] }))
-      .mockResolvedValueOnce(
-        jsonResponse({ provider: "aws", status: null, started_at: null, finished_at: null, error_message: null }),
-      );
+    let loggedIn = false;
+
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = urlOf(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/auth/login") && method === "POST") {
+        loggedIn = true;
+        return Promise.resolve(jsonResponse({ status: "ok" }));
+      }
+      if (url.includes("/auth/me")) {
+        return Promise.resolve(
+          loggedIn
+            ? jsonResponse({ id: 1, username: "admin", auth_provider: "local" })
+            : jsonResponse({}, false),
+        );
+      }
+      if (url.includes("/api/costs/summary")) {
+        return Promise.resolve(
+          jsonResponse({
+            provider: "aws",
+            period: "current_month",
+            currency: "USD",
+            total: 0,
+            previous_total: 0,
+            change_pct: null,
+            trend: [],
+          }),
+        );
+      }
+      if (url.includes("/api/costs/breakdown")) {
+        return Promise.resolve(jsonResponse({ provider: "aws", period: "current_month", currency: "USD", items: [] }));
+      }
+      if (url.includes("/api/sync/status")) {
+        return Promise.resolve(
+          jsonResponse({ provider: "aws", status: null, started_at: null, finished_at: null, error_message: null }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(

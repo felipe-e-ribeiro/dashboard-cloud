@@ -1,9 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 export function AppHeader() {
   const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const isLogsPage = location.pathname === "/sync-logs";
 
@@ -11,6 +13,13 @@ export function AppHeader() {
     <header className="dashboard-header">
       <h1>Cloud Cost Dashboard</h1>
       <div className="header-actions">
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+        >
+          {theme === "dark" ? "☀️ Claro" : "🌙 Escuro"}
+        </button>
         <Link to={isLogsPage ? "/" : "/sync-logs"}>{isLogsPage ? "Voltar ao dashboard" : "Ver logs de sync"}</Link>
         <button onClick={() => logout()}>Sair</button>
       </div>

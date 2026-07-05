@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.models import CostRecord, SyncRun
 
@@ -82,4 +82,96 @@ def test_sync_status_with_no_runs_yet(client):
 def test_invalid_provider_rejected(client):
     _login(client)
     response = client.get("/api/costs/summary", params={"provider": "gcp", "period": "current_month"})
+    assert response.status_code == 400
+
+
+def test_summary_includes_previous_period_delta(client, db_session):
+    from app.services.periods import previous_period_range
+
+    today = date.today()
+    _, previous_end = previous_period_range("current_month")
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=today, amount=100.0, currency="USD"))
+    db_session.add(
+        CostRecord(provider="aws", service_name="EC2", usage_date=previous_end, amount=50.0, currency="USD")
+    )
+    db_session.commit()
+
+    _login(client)
+    response = client.get("/api/costs/summary", params={"provider": "aws", "period": "current_month"})
+
+    body = response.json()
+    assert body["total"] == 100.0
+    assert body["previous_total"] == 50.0
+    assert body["change_pct"] == 100.0
+
+
+def test_summary_change_pct_null_without_previous_data(client, db_session):
+    today = date.today()
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=today, amount=10.0, currency="USD"))
+    db_session.commit()
+
+    _login(client)
+    response = client.get("/api/costs/summary", params={"provider": "aws", "period": "current_month"})
+
+    body = response.json()
+    assert body["previous_total"] == 0.0
+    assert body["change_pct"] is None
+
+
+def test_summary_previous_period_delta_for_last_6_months(client, db_session):
+    from app.services.periods import previous_period_range
+
+    today = date.today()
+    _, previous_end = previous_period_range("last_6_months")
+    db_session.add(CostRecord(provider="oci", service_name="Compute", usage_date=today, amount=30.0, currency="USD"))
+    db_session.add(
+        CostRecord(provider="oci", service_name="Compute", usage_date=previous_end, amount=10.0, currency="USD")
+    )
+    db_session.commit()
+
+    _login(client)
+    response = client.get("/api/costs/summary", params={"provider": "oci", "period": "last_6_months"})
+
+    body = response.json()
+    assert body["previous_total"] == 10.0
+    assert body["change_pct"] == 200.0
+
+
+def test_service_trend_groups_by_month(client, db_session):
+    today = date.today()
+    last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    db_session.add(CostRecord(provider="aws", service_name="EC2", usage_date=today, amount=40.0, currency="USD"))
+    db_session.add(
+        CostRecord(provider="aws", service_name="EC2", usage_date=last_month, amount=25.0, currency="USD")
+    )
+    db_session.add(CostRecord(provider="aws", service_name="S3", usage_date=today, amount=5.0, currency="USD"))
+    db_session.commit()
+
+    _login(client)
+    response = client.get(
+        "/api/costs/service-trend", params={"provider": "aws", "service_name": "EC2", "months": 6}
+    )
+
+    assert response.status_code == 200
+    points = {p["month"]: p["amount"] for p in response.json()["points"]}
+    assert points[f"{today.year:04d}-{today.month:02d}"] == 40.0
+    assert points[f"{last_month.year:04d}-{last_month.month:02d}"] == 25.0
+    assert "S3" not in str(points)
+
+
+def test_service_trend_empty_for_service_with_no_records(client, db_session):
+    _login(client)
+    response = client.get(
+        "/api/costs/service-trend", params={"provider": "aws", "service_name": "Nonexistent", "months": 6}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["points"] == []
+
+
+def test_service_trend_invalid_provider_rejected(client):
+    _login(client)
+    response = client.get(
+        "/api/costs/service-trend", params={"provider": "gcp", "service_name": "EC2", "months": 6}
+    )
     assert response.status_code == 400

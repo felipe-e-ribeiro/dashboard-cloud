@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, CostBreakdown, CostSummary, Period, Provider, SyncStatus, api } from "../api/client";
+import { formatChangePct } from "../utils/format";
 import { BreakdownTable } from "./BreakdownTable";
 import { PeriodSelector } from "./PeriodSelector";
+import { ServiceDetailPanel } from "./ServiceDetailPanel";
 import { SyncStatusBadge } from "./SyncStatusBadge";
 import { TrendChart } from "./TrendChart";
 
@@ -21,6 +23,7 @@ export function ProviderPanel({ provider }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(() => {
@@ -44,6 +47,7 @@ export function ProviderPanel({ provider }: Props) {
 
   useEffect(() => {
     setTriggerError(null);
+    setSelectedService(null);
     loadData();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -78,6 +82,9 @@ export function ProviderPanel({ provider }: Props) {
     }
   }
 
+  const change = summary ? formatChangePct(summary.change_pct, "período anterior") : null;
+  const selectedAmount = breakdown?.items.find((item) => item.service_name === selectedService)?.amount;
+
   return (
     <section className="provider-panel">
       <div className="provider-panel-toolbar">
@@ -105,14 +112,35 @@ export function ProviderPanel({ provider }: Props) {
 
       {!loading && !error && summary && (
         <>
-          <p className="total-cost">
-            Total: {summary.currency} {summary.total.toFixed(2)}
-          </p>
+          <div className="provider-total">
+            <div className="provider-total-label">
+              Total {provider.toUpperCase()} · {period === "current_month" ? "mês atual" : "últimos 6 meses"}
+            </div>
+            <div className="provider-total-amount">
+              Total: {summary.currency} {summary.total.toFixed(2)}
+            </div>
+            {change && <div className={`change-badge change-${change.direction}`}>{change.text}</div>}
+          </div>
           <TrendChart trend={summary.trend} />
         </>
       )}
 
-      {!loading && !error && breakdown && <BreakdownTable items={breakdown.items} currency={breakdown.currency} />}
+      {!loading && !error && breakdown && (
+        <div className="provider-body">
+          <BreakdownTable
+            items={breakdown.items}
+            selectedService={selectedService}
+            onSelect={setSelectedService}
+          />
+          <ServiceDetailPanel
+            provider={provider}
+            serviceName={selectedService}
+            serviceAmount={selectedAmount}
+            providerTotal={summary?.total ?? 0}
+            currency={breakdown.currency}
+          />
+        </div>
+      )}
     </section>
   );
 }

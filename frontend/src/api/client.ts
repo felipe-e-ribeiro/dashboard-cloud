@@ -11,6 +11,8 @@ export interface CostSummary {
   period: Period;
   currency: string;
   total: number;
+  previous_total: number;
+  change_pct: number | null;
   trend: TrendPoint[];
 }
 
@@ -24,6 +26,18 @@ export interface CostBreakdown {
   period: Period;
   currency: string;
   items: BreakdownItem[];
+}
+
+export interface ServiceTrendPoint {
+  month: string;
+  amount: number;
+}
+
+export interface ServiceTrend {
+  provider: Provider;
+  service_name: string;
+  currency: string;
+  points: ServiceTrendPoint[];
 }
 
 export interface SyncStatus {
@@ -85,6 +99,10 @@ export const api = {
     request<CostSummary>(`/api/costs/summary?provider=${provider}&period=${period}`),
   costBreakdown: (provider: Provider, period: Period) =>
     request<CostBreakdown>(`/api/costs/breakdown?provider=${provider}&period=${period}`),
+  serviceTrend: (provider: Provider, serviceName: string, months = 6) =>
+    request<ServiceTrend>(
+      `/api/costs/service-trend?provider=${provider}&service_name=${encodeURIComponent(serviceName)}&months=${months}`,
+    ),
   syncStatus: (provider: Provider) => request<SyncStatus>(`/api/sync/status?provider=${provider}`),
   triggerSync: (provider: Provider) =>
     request<{ status: string }>(`/api/sync/trigger?provider=${provider}`, { method: "POST" }),

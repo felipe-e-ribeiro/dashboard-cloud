@@ -27,7 +27,15 @@ describe("Dashboard", () => {
       if (url.includes("/api/costs/summary")) {
         const provider = url.includes("provider=oci") ? "oci" : "aws";
         return Promise.resolve(
-          jsonResponse({ provider, period: "current_month", currency: "USD", total: 42, trend: [] }),
+          jsonResponse({
+            provider,
+            period: "current_month",
+            currency: "USD",
+            total: 42,
+            previous_total: 40,
+            change_pct: 5,
+            trend: [],
+          }),
         );
       }
       if (url.includes("/api/costs/breakdown")) {
@@ -56,9 +64,11 @@ describe("Dashboard", () => {
       </MemoryRouter>,
     );
 
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "AWS" }));
+
     expect(await screen.findByText(/Total: USD 42/)).toBeInTheDocument();
 
-    const user = userEvent.setup();
     await user.click(screen.getByRole("tab", { name: "Oracle Cloud" }));
 
     expect(await screen.findByRole("tab", { name: "Oracle Cloud" })).toHaveAttribute("aria-selected", "true");
@@ -72,7 +82,15 @@ describe("Dashboard", () => {
       }
       if (url.includes("/api/costs/summary")) {
         return Promise.resolve(
-          jsonResponse({ provider: "aws", period: "current_month", currency: "USD", total: 0, trend: [] }),
+          jsonResponse({
+            provider: "aws",
+            period: "current_month",
+            currency: "USD",
+            total: 0,
+            previous_total: 0,
+            change_pct: null,
+            trend: [],
+          }),
         );
       }
       if (url.includes("/api/costs/breakdown")) {
@@ -100,6 +118,9 @@ describe("Dashboard", () => {
         <App />
       </MemoryRouter>,
     );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "AWS" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("credenciais inválidas");
   });

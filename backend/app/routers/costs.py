@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -8,15 +10,18 @@ from ..schemas import (
     BreakdownItem,
     CostBreakdown,
     CostSummary,
+    ServiceTrend,
+    ServiceTrendPoint,
     SyncRunOut,
     SyncStatus,
     SyncTriggerResponse,
     TrendPoint,
 )
 from ..services import sync as sync_service
-from ..services.periods import VALID_PERIODS, period_range
+from ..services.periods import VALID_PERIODS, months_ago_start, period_range, previous_period_range
 
 SYNC_LOGS_LIMIT = 20
+DEFAULT_SERVICE_TREND_MONTHS = 6
 
 router = APIRouter(prefix="/api", tags=["costs"])
 
@@ -54,7 +59,29 @@ def cost_summary(
     trend = [TrendPoint(usage_date=usage_date, amount=float(amount)) for usage_date, amount in rows]
     total = sum(point.amount for point in trend)
 
-    return CostSummary(provider=provider, period=period, currency="USD", total=total, trend=trend)
+    previous_start, previous_end = previous_period_range(period)
+    previous_total = (
+        db.query(func.sum(CostRecord.amount))
+        .filter(
+            CostRecord.provider == provider,
+            CostRecord.usage_date >= previous_start,
+            CostRecord.usage_date <= previous_end,
+        )
+        .scalar()
+        or 0.0
+    )
+    previous_total = float(previous_total)
+    change_pct = ((total - previous_total) / previous_total * 100) if previous_total else None
+
+    return CostSummary(
+        provider=provider,
+        period=period,
+        currency="USD",
+        total=total,
+        previous_total=previous_total,
+        change_pct=change_pct,
+        trend=trend,
+    )
 
 
 @router.get("/costs/breakdown", response_model=CostBreakdown)
@@ -81,6 +108,39 @@ def cost_breakdown(
     items = [BreakdownItem(service_name=service_name, amount=float(total)) for service_name, total in rows]
 
     return CostBreakdown(provider=provider, period=period, currency="USD", items=items)
+
+
+@router.get("/costs/service-trend", response_model=ServiceTrend)
+def service_trend(
+    provider: str = Query(...),
+    service_name: str = Query(...),
+    months: int = Query(DEFAULT_SERVICE_TREND_MONTHS),
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    if provider not in VALID_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
+
+    start = months_ago_start(months)
+
+    rows = (
+        db.query(CostRecord.usage_date, CostRecord.amount)
+        .filter(
+            CostRecord.provider == provider,
+            CostRecord.service_name == service_name,
+            CostRecord.usage_date >= start,
+        )
+        .all()
+    )
+
+    totals_by_month: dict[str, float] = defaultdict(float)
+    for usage_date, amount in rows:
+        month_key = f"{usage_date.year:04d}-{usage_date.month:02d}"
+        totals_by_month[month_key] += float(amount)
+
+    points = [ServiceTrendPoint(month=month, amount=amount) for month, amount in sorted(totals_by_month.items())]
+
+    return ServiceTrend(provider=provider, service_name=service_name, currency="USD", points=points)
 
 
 @router.get("/sync/status", response_model=SyncStatus)

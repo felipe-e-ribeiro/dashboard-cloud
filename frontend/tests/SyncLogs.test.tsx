@@ -78,7 +78,15 @@ describe("Sync logs page", () => {
       if (url.includes("/api/sync/logs")) return Promise.resolve(jsonResponse([]));
       if (url.includes("/api/costs/summary")) {
         return Promise.resolve(
-          jsonResponse({ provider: "aws", period: "current_month", currency: "USD", total: 0, trend: [] }),
+          jsonResponse({
+            provider: "aws",
+            period: "current_month",
+            currency: "USD",
+            total: 0,
+            previous_total: 0,
+            change_pct: null,
+            trend: [],
+          }),
         );
       }
       if (url.includes("/api/costs/breakdown")) {
@@ -103,6 +111,7 @@ describe("Sync logs page", () => {
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole("link", { name: "Voltar ao dashboard" }));
+    await user.click(await screen.findByRole("tab", { name: "AWS" }));
 
     expect(await screen.findByRole("button", { name: "Sincronizar agora" })).toBeInTheDocument();
   });
