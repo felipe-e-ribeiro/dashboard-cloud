@@ -1,1 +1,21 @@
 .superpowers/
+
+# secrets — never commit real credentials
+.env
+.env.*.local
+secrets/*
+!secrets/README.md
+
+# python
+__pycache__/
+*.pyc
+.venv/
+backend/*.db
+
+# node
+node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# local harness session state
+.claude/scheduled_tasks.lock
