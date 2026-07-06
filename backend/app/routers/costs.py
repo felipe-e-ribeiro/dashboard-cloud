@@ -18,6 +18,7 @@ from ..schemas import (
     TrendPoint,
 )
 from ..services import fx
+from ..services import provider_config
 from ..services import sync as sync_service
 from ..services.periods import VALID_PERIODS, months_ago_start, period_range, previous_period_range
 
@@ -203,6 +204,9 @@ def sync_trigger(
 ):
     if provider not in VALID_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
+
+    if not provider_config.is_enabled(db, provider):
+        raise HTTPException(status_code=400, detail=f"{provider} is not enabled")
 
     if sync_service.is_sync_running(db, provider):
         raise HTTPException(status_code=409, detail=f"A sync is already running for {provider}")

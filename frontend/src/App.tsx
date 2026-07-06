@@ -6,6 +6,7 @@ import { CurrencyProvider } from "./context/CurrencyContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { SyncLogsPage } from "./pages/SyncLogsPage";
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -35,6 +36,14 @@ export function App() {
               element={
                 <RequireAuth>
                   <SyncLogsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <RequireAuth>
+                  <SettingsPage />
                 </RequireAuth>
               }
             />

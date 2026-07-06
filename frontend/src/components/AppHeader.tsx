@@ -9,7 +9,7 @@ export function AppHeader() {
   const { theme, toggleTheme } = useTheme();
   const { currency, toggleCurrency } = useCurrency();
   const location = useLocation();
-  const isLogsPage = location.pathname === "/sync-logs";
+  const isSubPage = location.pathname === "/sync-logs" || location.pathname === "/settings";
 
   return (
     <header className="dashboard-header">
@@ -29,7 +29,14 @@ export function AppHeader() {
         >
           {theme === "dark" ? "☀️ Claro" : "🌙 Escuro"}
         </button>
-        <Link to={isLogsPage ? "/" : "/sync-logs"}>{isLogsPage ? "Voltar ao dashboard" : "Ver logs de sync"}</Link>
+        {isSubPage ? (
+          <Link to="/">Voltar ao dashboard</Link>
+        ) : (
+          <>
+            <Link to="/sync-logs">Ver logs de sync</Link>
+            <Link to="/settings">Configurações</Link>
+          </>
+        )}
         <button onClick={() => logout()}>Sair</button>
       </div>
     </header>

@@ -76,3 +76,30 @@ class SyncRunOut(BaseModel):
 
 class SyncTriggerResponse(BaseModel):
     status: str
+
+
+class ProviderStatus(BaseModel):
+    provider: str
+    enabled: bool
+    configured: bool
+    last_validated_at: datetime | None
+    last_validation_status: str | None
+    last_validation_error: str | None
+
+
+class AwsCredentialsIn(BaseModel):
+    access_key_id: str
+    secret_access_key: str
+    region: str
+
+
+class OciCredentialsIn(BaseModel):
+    tenancy_ocid: str
+    user_ocid: str
+    fingerprint: str
+    region: str
+    private_key_pem: str
+
+
+class EnabledIn(BaseModel):
+    enabled: bool

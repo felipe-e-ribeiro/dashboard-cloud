@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import CostRecord, SyncRun
-from . import aws_cost, oci_cost
+from . import aws_cost, oci_cost, provider_config
 from .periods import period_range
 
 PROVIDER_FETCHERS = {
@@ -56,7 +56,10 @@ def upsert_cost_records(db: Session, provider: str, rows: list[dict]) -> int:
     return count
 
 
-def sync_provider(db: Session, provider: str, today: date | None = None) -> SyncRun:
+def sync_provider(db: Session, provider: str, today: date | None = None) -> SyncRun | None:
+    if not provider_config.is_enabled(db, provider):
+        return None
+
     today = today or date.today()
     run = SyncRun(
         provider=provider,
@@ -69,9 +72,10 @@ def sync_provider(db: Session, provider: str, today: date | None = None) -> Sync
     db.refresh(run)
 
     try:
+        credentials = provider_config.get_decrypted(db, provider)
         start = _backfill_start(today) if not _has_existing_records(db, provider) else today
         fetcher = PROVIDER_FETCHERS[provider]
-        rows = fetcher(start, today)
+        rows = fetcher(start, today, credentials)
         run.records_synced = upsert_cost_records(db, provider, rows)
         run.status = "success"
         run.error_message = None
@@ -86,7 +90,8 @@ def sync_provider(db: Session, provider: str, today: date | None = None) -> Sync
 
 
 def sync_all(db: Session, today: date | None = None) -> list[SyncRun]:
-    return [sync_provider(db, provider, today) for provider in PROVIDER_FETCHERS]
+    runs = (sync_provider(db, provider, today) for provider in PROVIDER_FETCHERS)
+    return [run for run in runs if run is not None]
 
 
 def is_sync_running(db: Session, provider: str) -> bool:

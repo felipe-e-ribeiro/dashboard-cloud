@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/App";
+import { providerStatusesResponse } from "./providerStatusFixture";
 
 function jsonResponse(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 400, json: async () => body } as Response;
@@ -23,6 +24,9 @@ describe("Dashboard", () => {
       const url = urlOf(input);
       if (url.includes("/auth/me")) {
         return Promise.resolve(jsonResponse({ id: 1, username: "admin", auth_provider: "local" }));
+      }
+      if (url.includes("/api/settings/providers")) {
+        return Promise.resolve(jsonResponse(providerStatusesResponse()));
       }
       if (url.includes("/api/costs/summary")) {
         const provider = url.includes("provider=oci") ? "oci" : "aws";
@@ -79,6 +83,9 @@ describe("Dashboard", () => {
       const url = urlOf(input);
       if (url.includes("/auth/me")) {
         return Promise.resolve(jsonResponse({ id: 1, username: "admin", auth_provider: "local" }));
+      }
+      if (url.includes("/api/settings/providers")) {
+        return Promise.resolve(jsonResponse(providerStatusesResponse()));
       }
       if (url.includes("/api/costs/summary")) {
         return Promise.resolve(

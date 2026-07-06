@@ -64,6 +64,29 @@ export interface SyncRunLogEntry {
   error_message: string | null;
 }
 
+export interface ProviderStatus {
+  provider: Provider;
+  enabled: boolean;
+  configured: boolean;
+  last_validated_at: string | null;
+  last_validation_status: "success" | "failed" | null;
+  last_validation_error: string | null;
+}
+
+export interface AwsCredentials {
+  access_key_id: string;
+  secret_access_key: string;
+  region: string;
+}
+
+export interface OciCredentials {
+  tenancy_ocid: string;
+  user_ocid: string;
+  fingerprint: string;
+  region: string;
+  private_key_pem: string;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -108,4 +131,15 @@ export const api = {
   triggerSync: (provider: Provider) =>
     request<{ status: string }>(`/api/sync/trigger?provider=${provider}`, { method: "POST" }),
   syncLogs: (provider: Provider) => request<SyncRunLogEntry[]>(`/api/sync/logs?provider=${provider}`),
+  getProviderStatuses: () => request<ProviderStatus[]>("/api/settings/providers"),
+  saveProviderCredentials: (provider: Provider, credentials: AwsCredentials | OciCredentials) =>
+    request<ProviderStatus>(`/api/settings/providers/${provider}`, {
+      method: "PUT",
+      body: JSON.stringify(credentials),
+    }),
+  setProviderEnabled: (provider: Provider, enabled: boolean) =>
+    request<ProviderStatus>(`/api/settings/providers/${provider}/enabled`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
 };

@@ -442,3 +442,99 @@ input {
 .empty-state {
   color: var(--color-text-muted);
 }
+
+/* Settings */
+.provider-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.provider-settings-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.provider-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.provider-settings-header h3 {
+  margin: 0;
+}
+
+.provider-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.provider-settings-toggle input:disabled {
+  cursor: not-allowed;
+}
+
+.provider-settings-validation {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 1rem;
+}
+
+.provider-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 420px;
+}
+
+.provider-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.provider-settings-field label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.provider-settings-field input,
+.provider-settings-field textarea {
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+.provider-settings-field textarea {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.provider-settings-form button {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.provider-settings-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

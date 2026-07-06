@@ -2,19 +2,19 @@ import { useEffect, useState } from "react";
 
 import { CostSummary, Provider, api } from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
-import { PROVIDERS } from "./ProviderTabs";
 import { ProviderSummaryCard } from "./ProviderSummaryCard";
 
 const OVERVIEW_PERIOD = "current_month";
 
 interface Props {
+  providers: { key: Provider; label: string }[];
   onSelectProvider: (provider: Provider) => void;
 }
 
 type SummaryState = Partial<Record<Provider, CostSummary>>;
 type ErrorState = Partial<Record<Provider, boolean>>;
 
-export function OverviewPanel({ onSelectProvider }: Props) {
+export function OverviewPanel({ providers, onSelectProvider }: Props) {
   const { currency: requestCurrency } = useCurrency();
   const [summaries, setSummaries] = useState<SummaryState>({});
   const [errors, setErrors] = useState<ErrorState>({});
@@ -25,7 +25,7 @@ export function OverviewPanel({ onSelectProvider }: Props) {
     setLoading(true);
 
     Promise.all(
-      PROVIDERS.map(({ key }) =>
+      providers.map(({ key }) =>
         api
           .costSummary(key, OVERVIEW_PERIOD, requestCurrency)
           .then((summary) => ({ key, summary, failed: false }) as const)
@@ -47,11 +47,11 @@ export function OverviewPanel({ onSelectProvider }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [requestCurrency]);
+  }, [providers, requestCurrency]);
 
   if (loading) return <p>Carregando...</p>;
 
-  const loaded = PROVIDERS.map(({ key }) => summaries[key]).filter((summary): summary is CostSummary => !!summary);
+  const loaded = providers.map(({ key }) => summaries[key]).filter((summary): summary is CostSummary => !!summary);
   const combinedTotal = loaded.reduce((sum, summary) => sum + summary.total, 0);
   const combinedPrevious = loaded.reduce((sum, summary) => sum + summary.previous_total, 0);
   const combinedChangePct = combinedPrevious ? ((combinedTotal - combinedPrevious) / combinedPrevious) * 100 : null;
@@ -75,7 +75,7 @@ export function OverviewPanel({ onSelectProvider }: Props) {
       )}
 
       <div className="overview-cards">
-        {PROVIDERS.map(({ key, label }) => {
+        {providers.map(({ key, label }) => {
           const summary = summaries[key];
           if (errors[key]) {
             return (

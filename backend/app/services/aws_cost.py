@@ -2,16 +2,17 @@ from datetime import date, timedelta
 
 import boto3
 
-from ..config import settings
 
+def fetch_daily_costs_by_service(start: date, end_inclusive: date, credentials: dict) -> list[dict]:
+    """Fetch daily unblended cost by service from AWS Cost Explorer for [start, end_inclusive].
 
-def fetch_daily_costs_by_service(start: date, end_inclusive: date) -> list[dict]:
-    """Fetch daily unblended cost by service from AWS Cost Explorer for [start, end_inclusive]."""
+    `credentials` must contain `access_key_id`, `secret_access_key`, and `region`.
+    """
     client = boto3.client(
         "ce",
-        region_name=settings.aws_region,
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=credentials["region"],
+        aws_access_key_id=credentials["access_key_id"],
+        aws_secret_access_key=credentials["secret_access_key"],
     )
 
     # Cost Explorer's TimePeriod.End is exclusive, so extend by one day to include end_inclusive.

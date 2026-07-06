@@ -1,7 +1,7 @@
 # secrets/
 
-Place the OCI API signing private key here as `oci_key.pem`. This directory is gitignored
-(except this file) — `oci_key.pem` never gets committed.
-
-docker-compose mounts `./secrets/oci_key.pem` into the backend container at the path
-set by `OCI_KEY_FILE_PATH` in `.env` (default `/run/secrets/oci_key.pem`).
+No longer used. AWS and OCI credentials — including the OCI API signing private key —
+are configured from the dashboard's Settings page (`/settings`) and stored encrypted in
+Postgres instead of being read from files or environment variables. This directory is
+kept (gitignored) only in case you still have a local `oci_key.pem` here from before;
+it's safe to delete once you've re-entered the key through `/settings`.

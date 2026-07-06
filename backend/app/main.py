@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import SessionLocal
-from .routers import auth, costs
+from .routers import auth, costs, settings as settings_router
 from .seed import seed_admin_user
 from .services.fx import sync_fx_rates
 from .services.scheduler import start_scheduler
@@ -34,6 +34,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(costs.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/health")

@@ -3,8 +3,6 @@ from datetime import date, datetime, timedelta, timezone
 
 import oci
 
-from ..config import settings
-
 # The OCI Usage API rejects DAILY-granularity requests spanning more than 93 days,
 # so multi-month ranges (e.g. the 6-month backfill) must be split into chunks.
 MAX_CHUNK_DAYS = 90
@@ -14,13 +12,13 @@ MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 5
 
 
-def _client() -> "oci.usage_api.UsageapiClient":
+def _client(credentials: dict) -> "oci.usage_api.UsageapiClient":
     config = {
-        "user": settings.oci_user_ocid,
-        "key_file": settings.oci_key_file_path,
-        "fingerprint": settings.oci_fingerprint,
-        "tenancy": settings.oci_tenancy_ocid,
-        "region": settings.oci_region,
+        "user": credentials["user_ocid"],
+        "key_content": credentials["private_key_pem"],
+        "fingerprint": credentials["fingerprint"],
+        "tenancy": credentials["tenancy_ocid"],
+        "region": credentials["region"],
     }
     # The Usage API can take well over a minute to aggregate a ~90-day window across all services.
     return oci.usage_api.UsageapiClient(config, timeout=(10, 180))
@@ -31,11 +29,13 @@ def _is_retryable(exc: Exception) -> bool:
     return status is None or status >= 500
 
 
-def _fetch_chunk(client: "oci.usage_api.UsageapiClient", start: date, end_inclusive: date) -> list[dict]:
+def _fetch_chunk(
+    client: "oci.usage_api.UsageapiClient", tenancy_ocid: str, start: date, end_inclusive: date
+) -> list[dict]:
     # The Usage API's time_usage_ended is exclusive, so extend by one day to include end_inclusive.
     end_exclusive = end_inclusive + timedelta(days=1)
     details = oci.usage_api.models.RequestSummarizedUsagesDetails(
-        tenant_id=settings.oci_tenancy_ocid,
+        tenant_id=tenancy_ocid,
         granularity="DAILY",
         query_type="COST",
         group_by=["service"],
@@ -68,15 +68,20 @@ def _fetch_chunk(client: "oci.usage_api.UsageapiClient", start: date, end_inclus
     return results
 
 
-def fetch_daily_costs_by_service(start: date, end_inclusive: date) -> list[dict]:
-    """Fetch daily cost by service from the OCI Usage API for [start, end_inclusive]."""
-    client = _client()
+def fetch_daily_costs_by_service(start: date, end_inclusive: date, credentials: dict) -> list[dict]:
+    """Fetch daily cost by service from the OCI Usage API for [start, end_inclusive].
+
+    `credentials` must contain `tenancy_ocid`, `user_ocid`, `fingerprint`, `region`,
+    and `private_key_pem`.
+    """
+    client = _client(credentials)
+    tenancy_ocid = credentials["tenancy_ocid"]
 
     results: list[dict] = []
     chunk_start = start
     while chunk_start <= end_inclusive:
         chunk_end = min(chunk_start + timedelta(days=MAX_CHUNK_DAYS - 1), end_inclusive)
-        results.extend(_fetch_chunk(client, chunk_start, chunk_end))
+        results.extend(_fetch_chunk(client, tenancy_ocid, chunk_start, chunk_end))
         chunk_start = chunk_end + timedelta(days=1)
 
     return results

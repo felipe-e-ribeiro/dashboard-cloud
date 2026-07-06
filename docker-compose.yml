@@ -19,8 +19,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./secrets/oci_key.pem:${OCI_KEY_FILE_PATH:-/run/secrets/oci_key.pem}:ro
     ports:
       - "8090:8000"
 

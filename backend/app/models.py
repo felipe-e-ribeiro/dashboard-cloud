@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Date, DateTime, Integer, LargeBinary, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -40,6 +40,17 @@ class ExchangeRate(Base):
 
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     rate: Mapped[float] = mapped_column(Numeric(10, 4))
+
+
+class CloudProviderConfig(Base):
+    __tablename__ = "cloud_provider_configs"
+
+    provider: Mapped[str] = mapped_column(String, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(default=False)
+    encrypted_config: Mapped[bytes] = mapped_column(LargeBinary)
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_validation_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_validation_error: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SyncRun(Base):

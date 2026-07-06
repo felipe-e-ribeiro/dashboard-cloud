@@ -4,11 +4,16 @@ from datetime import datetime, timedelta, timezone
 
 from app.database import SessionLocal
 from app.models import SyncRun
-from app.services import sync as sync_service
+from app.services import provider_config, sync as sync_service
 
 
 def _login(client):
     client.post("/auth/login", json={"username": "admin", "password": "admin-password"})
+
+
+def _enable(db, provider):
+    provider_config.save_validated(db, provider, {"dummy": "creds"}, datetime.now(timezone.utc))
+    provider_config.set_enabled(db, provider, True)
 
 
 def _wait_for_sync_to_finish(provider: str, timeout: float = 2.0) -> SyncRun:
@@ -30,8 +35,9 @@ def _wait_for_sync_to_finish(provider: str, timeout: float = 2.0) -> SyncRun:
     raise AssertionError(f"sync for {provider} did not finish within {timeout}s")
 
 
-def test_trigger_starts_background_sync(client, monkeypatch):
-    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": lambda s, e: [], "oci": lambda s, e: []})
+def test_trigger_starts_background_sync(client, monkeypatch, db_session):
+    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": lambda s, e, c: [], "oci": lambda s, e, c: []})
+    _enable(db_session, "aws")
     _login(client)
 
     response = client.post("/api/sync/trigger", params={"provider": "aws"})
@@ -42,16 +48,17 @@ def test_trigger_starts_background_sync(client, monkeypatch):
     assert run.status == "success"
 
 
-def test_trigger_rejected_while_running(client, monkeypatch):
+def test_trigger_rejected_while_running(client, monkeypatch, db_session):
     started = threading.Event()
     release = threading.Event()
 
-    def slow_aws(start, end):
+    def slow_aws(start, end, credentials):
         started.set()
         release.wait(timeout=2)
         return []
 
-    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": slow_aws, "oci": lambda s, e: []})
+    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": slow_aws, "oci": lambda s, e, c: []})
+    _enable(db_session, "aws")
     _login(client)
 
     first = client.post("/api/sync/trigger", params={"provider": "aws"})
@@ -65,8 +72,9 @@ def test_trigger_rejected_while_running(client, monkeypatch):
     _wait_for_sync_to_finish("aws")
 
 
-def test_trigger_allowed_after_previous_finishes(client, monkeypatch):
-    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": lambda s, e: [], "oci": lambda s, e: []})
+def test_trigger_allowed_after_previous_finishes(client, monkeypatch, db_session):
+    monkeypatch.setattr(sync_service, "PROVIDER_FETCHERS", {"aws": lambda s, e, c: [], "oci": lambda s, e, c: []})
+    _enable(db_session, "aws")
     _login(client)
 
     first = client.post("/api/sync/trigger", params={"provider": "aws"})
@@ -81,6 +89,12 @@ def test_trigger_allowed_after_previous_finishes(client, monkeypatch):
 def test_trigger_invalid_provider_rejected(client):
     _login(client)
     response = client.post("/api/sync/trigger", params={"provider": "gcp"})
+    assert response.status_code == 400
+
+
+def test_trigger_rejected_when_provider_disabled(client):
+    _login(client)
+    response = client.post("/api/sync/trigger", params={"provider": "aws"})
     assert response.status_code == 400
 
 

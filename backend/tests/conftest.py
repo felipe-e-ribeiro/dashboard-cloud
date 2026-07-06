@@ -1,9 +1,12 @@
 import os
 
+from cryptography.fernet import Fernet
+
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_cloud_cost.db")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "admin-password")
+os.environ.setdefault("SECRETS_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
 import threading
 
