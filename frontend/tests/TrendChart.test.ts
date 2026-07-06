@@ -36,4 +36,22 @@ describe("toCumulative", () => {
   it("returns an empty array for an empty trend", () => {
     expect(toCumulative([])).toEqual([]);
   });
+
+  it("resets the running total at each calendar month boundary", () => {
+    // A last-6-months view spans multiple months; each month should read as its own
+    // "cost so far this month" curve instead of stacking on top of prior months.
+    const trend = [
+      { usage_date: "2026-06-29", amount: 5 },
+      { usage_date: "2026-06-30", amount: 1 },
+      { usage_date: "2026-07-01", amount: 3 },
+      { usage_date: "2026-07-02", amount: 0.5 },
+    ];
+
+    expect(toCumulative(trend)).toEqual([
+      { usage_date: "2026-06-29", amount: 5 },
+      { usage_date: "2026-06-30", amount: 6 },
+      { usage_date: "2026-07-01", amount: 3 },
+      { usage_date: "2026-07-02", amount: 3.5 },
+    ]);
+  });
 });
