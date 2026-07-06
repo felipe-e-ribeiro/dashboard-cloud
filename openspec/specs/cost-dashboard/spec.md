@@ -46,7 +46,7 @@ The system SHALL provide an endpoint returning the most recent sync timestamp an
 - **THEN** the system returns the timestamp and status (`success` or `failed`) of the most recent AWS `sync_runs` entry
 
 ### Requirement: Dashboard tabs per cloud
-The frontend SHALL present the AWS and Oracle Cloud cost views as separate tabs within the authenticated dashboard, each showing the period total (with its period-over-period change) above a trend chart and a service breakdown table, a period selector (current month / last 6 months), and a last-sync indicator.
+The frontend SHALL present a tab for each enabled cloud provider (AWS and/or Oracle Cloud) within the authenticated dashboard, each showing the period total (with its period-over-period change) above a trend chart and a service breakdown table, a period selector (current month / last 6 months), and a last-sync indicator. A disabled provider's tab SHALL NOT appear.
 
 #### Scenario: Switching tabs shows the matching provider's data
 - **WHEN** the user selects the "Oracle Cloud" tab
@@ -59,6 +59,10 @@ The frontend SHALL present the AWS and Oracle Cloud cost views as separate tabs 
 #### Scenario: Total is shown above the trend and breakdown
 - **WHEN** the user views the AWS or Oracle Cloud tab
 - **THEN** the period total and its period-over-period change are the first cost information visible, above the trend chart and the breakdown table
+
+#### Scenario: Disabled provider's tab is hidden
+- **WHEN** a provider is disabled in its provider configuration
+- **THEN** the Dashboard and Sync Logs pages do not show a tab for that provider
 
 ### Requirement: Service trend API
 The system SHALL provide an endpoint returning the monthly total cost of a single service, for a given provider, service name, and currency (`usd` or `brl`, defaulting to `usd`), over the last N closed months plus the current month (N defaulting to 6), reading exclusively from persisted `cost_records` (and, for `brl`, persisted `exchange_rates`).
@@ -76,19 +80,26 @@ The system SHALL provide an endpoint returning the monthly total cost of a singl
 - **THEN** the system converts each underlying day's cost using that day's own USD→BRL rate (with carry-forward for days with no published rate) before summing into monthly totals
 
 ### Requirement: Dashboard overview tab
-The frontend SHALL present a combined "Overview" tab, shown before the AWS and Oracle Cloud tabs, displaying the combined total cost across both providers (with its period-over-period change) and a summary card per provider (each showing that provider's total and a trend indicator).
+The frontend SHALL present a combined "Overview" tab, shown before the per-provider tabs, displaying the combined total cost across all enabled providers (with its period-over-period change) and a summary card per enabled provider (each showing that provider's total and a trend indicator).
 
 #### Scenario: Overview shows combined total and per-provider cards
-- **WHEN** the user selects the "Overview" tab
-- **THEN** the dashboard displays the sum of the AWS and Oracle Cloud totals with its period-over-period change, and one summary card per provider
+- **WHEN** the user selects the "Overview" tab and at least one provider is enabled
+- **THEN** the dashboard displays the sum of the enabled providers' totals with its period-over-period change, and one summary card per enabled provider
 
 #### Scenario: One provider fails to load
-- **WHEN** the cost summary request for one provider fails while the other succeeds
+- **WHEN** the cost summary request for one enabled provider fails while another succeeds
 - **THEN** the Overview tab shows the successfully loaded provider's card and an error state for the other, without blocking the combined total from being shown as unavailable
 
 #### Scenario: No drill-down from the overview
 - **WHEN** the user is on the "Overview" tab
 - **THEN** clicking a provider's summary card navigates to that provider's tab, and no per-service detail is shown within the Overview tab itself
+
+### Requirement: Empty state when no providers are enabled
+The frontend SHALL show a message directing the user to the settings page instead of an empty or broken dashboard when no provider is currently enabled.
+
+#### Scenario: No providers enabled
+- **WHEN** the user opens the Dashboard and no provider is enabled
+- **THEN** the system shows a message indicating no cloud is configured, with a link to the settings page, instead of any provider tab or the Overview tab
 
 ### Requirement: Per-service drill-down
 The frontend SHALL allow the user to select a service row in a provider's breakdown table to view that service's monthly cost history for the last 6 closed months plus the current month, alongside its period-over-period change.
