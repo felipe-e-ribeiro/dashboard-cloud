@@ -430,6 +430,12 @@ input {
   margin-top: 0.5rem;
 }
 
+.service-detail-note {
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+  margin-top: 0.4rem;
+}
+
 .total-cost {
   font-size: 1.5rem;
   font-weight: 600;
