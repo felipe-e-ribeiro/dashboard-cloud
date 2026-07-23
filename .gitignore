@@ -19,3 +19,10 @@ frontend/tsconfig.tsbuildinfo
 
 # local harness session state
 .claude/scheduled_tasks.lock
+skills-lock.json
+.vscode/
+CLAUDE.md
+.claude/
+.agents/
+.docs/
+.openspec/
