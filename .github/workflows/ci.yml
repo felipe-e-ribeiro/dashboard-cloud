@@ -92,7 +92,9 @@ jobs:
             ${{ steps.image.outputs.name }}:latest
 
       # Gate: fails the job (and blocks the push below) if any HIGH or
-      # CRITICAL severity CVE is found. LOW/MEDIUM findings are allowed.
+      # CRITICAL severity CVE with an available fix is found. LOW/MEDIUM
+      # findings and CVEs with no upstream fix yet (unfixed) are allowed,
+      # since there's no action we can take on those until a fix ships.
       - name: Trivy scan (block on HIGH/CRITICAL CVEs)
         uses: aquasecurity/trivy-action@0.29.0
         with:
@@ -100,4 +102,4 @@ jobs:
           image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: "1"
-          ignore-unfixed: false
+          ignore-unfixed: true
