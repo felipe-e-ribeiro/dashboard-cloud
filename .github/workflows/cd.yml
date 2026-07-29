@@ -48,7 +48,7 @@ jobs:
       # Gate: fails the job (and blocks the push below) if any HIGH or
       # CRITICAL severity CVE is found. LOW/MEDIUM findings are allowed.
       - name: Trivy scan (block on HIGH/CRITICAL CVEs)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ${{ steps.image.outputs.name }}:${{ github.ref_name }}
