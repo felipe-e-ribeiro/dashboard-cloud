@@ -59,6 +59,28 @@ jobs:
             ${{ steps.image.outputs.name }}:${{ github.ref_name }}
             ${{ steps.image.outputs.name }}:latest
 
+      # docker/build-push-action's own failure gives no detail beyond "exit
+      # code: 1" on the public run page (full raw logs need repo-admin auth,
+      # which this session doesn't have) -- re-run the same build directly
+      # via the CLI so its output can be written to the step summary, which
+      # IS visible on the public run page without auth.
+      - name: Diagnose build failure (public log excerpt)
+        if: failure()
+        run: |
+          build_args=()
+          if [ -n "${{ matrix.build-args }}" ]; then
+            build_args=(--build-arg "${{ matrix.build-args }}")
+          fi
+          docker buildx build --platform linux/arm64 "${build_args[@]}" \
+            -f ${{ matrix.dockerfile }} ${{ matrix.context }} \
+            --progress=plain > /tmp/build.log 2>&1 || true
+          {
+            echo "### Build failure log tail (${{ matrix.name }})"
+            echo '```'
+            tail -c 15000 /tmp/build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Gate: fails the job (and blocks the push below) if any HIGH or
       # CRITICAL severity CVE with an available fix is found. LOW/MEDIUM
       # findings and CVEs with no upstream fix yet (unfixed) are allowed,
