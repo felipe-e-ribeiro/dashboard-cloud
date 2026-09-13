@@ -23,12 +23,19 @@ RUN pip install --no-cache-dir --target=/app/deps -r requirements.txt
 # multiarch directory for that platform -- only the hardcoded COPY paths in
 # the final stage need DEB_MULTIARCH to match.
 FROM debian:12-slim AS patch
-# Modern apt sandboxes its dpkg helper processes with seccomp-BPF, which
-# routinely crashes under QEMU user-mode emulation (cross-building arm64 on
-# an amd64 GitHub runner) -- "apt-get install" fails with no useful error
-# beyond exit code 1. Disabling the sandbox only affects this build stage,
-# never the final runtime image.
+# Modern apt sandboxes its dpkg helper processes with seccomp-BPF, which can
+# crash under QEMU user-mode emulation (cross-building arm64 on an amd64
+# GitHub runner) -- kept as a general precaution, though it wasn't the actual
+# cause of the failure below.
 RUN echo 'APT::Sandbox::Seccomp "false";' > /etc/apt/apt.conf.d/no-seccomp-under-qemu
+# The real cause (confirmed via the actual build log, 2026-09-13): dpkg's
+# libc-bin postinst runs `ldconfig` as a trigger, and `ldconfig` itself
+# crashes under QEMU emulation with no error output beyond the generic
+# buildx "exit code: 1" -- the log simply stops mid-"Processing triggers for
+# libc-bin". This stage only exists to extract library files for the final
+# stage's COPY (ldconfig's own cache is never used here), so it's safe to
+# turn it into a no-op for this stage alone.
+RUN ln -sf /bin/true /sbin/ldconfig && ln -sf /bin/true /usr/sbin/ldconfig
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libssl3 \
       libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
