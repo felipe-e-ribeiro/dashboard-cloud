@@ -1,14 +1,16 @@
+# Debian's multiarch lib directory name, overridden per platform by CI
+# (--build-arg DEB_MULTIARCH=aarch64-linux-gnu when building linux/arm64 for
+# oks-personal's Ampere nodes) -- default matches local amd64 docker-compose.
+# Declared before the first FROM so it's a true global default, inherited by
+# any stage that redeclares a bare `ARG DEB_MULTIARCH` (see final stage).
+ARG DEB_MULTIARCH=x86_64-linux-gnu
+
 FROM python:3.11-slim AS build
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --target=/app/deps -r requirements.txt
-
-# Debian's multiarch lib directory name, overridden per platform by CI
-# (--build-arg DEB_MULTIARCH=aarch64-linux-gnu when building linux/arm64 for
-# oks-personal's Ampere nodes) -- default matches local amd64 docker-compose.
-ARG DEB_MULTIARCH=x86_64-linux-gnu
 
 # gcr.io/distroless/python3-debian12 has no shell/package manager, so its base
 # packages can only get security fixes when Google rebuilds the image. When
@@ -21,6 +23,12 @@ ARG DEB_MULTIARCH=x86_64-linux-gnu
 # multiarch directory for that platform -- only the hardcoded COPY paths in
 # the final stage need DEB_MULTIARCH to match.
 FROM debian:12-slim AS patch
+# Modern apt sandboxes its dpkg helper processes with seccomp-BPF, which
+# routinely crashes under QEMU user-mode emulation (cross-building arm64 on
+# an amd64 GitHub runner) -- "apt-get install" fails with no useful error
+# beyond exit code 1. Disabling the sandbox only affects this build stage,
+# never the final runtime image.
+RUN echo 'APT::Sandbox::Seccomp "false";' > /etc/apt/apt.conf.d/no-seccomp-under-qemu
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libssl3 \
       libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
