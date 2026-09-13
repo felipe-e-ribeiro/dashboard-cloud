@@ -23,31 +23,30 @@ RUN pip install --no-cache-dir --target=/app/deps -r requirements.txt
 # multiarch directory for that platform -- only the hardcoded COPY paths in
 # the final stage need DEB_MULTIARCH to match.
 FROM debian:12-slim AS patch
-# Modern apt sandboxes its dpkg helper processes with seccomp-BPF, which can
-# crash under QEMU user-mode emulation (cross-building arm64 on an amd64
-# GitHub runner) -- kept as a general precaution, though it wasn't the actual
-# cause of the failure below.
-RUN echo 'APT::Sandbox::Seccomp "false";' > /etc/apt/apt.conf.d/no-seccomp-under-qemu
-# The real cause (confirmed via the actual build log, 2026-09-13): dpkg's
-# libc-bin postinst runs `ldconfig` as a trigger, and `ldconfig` itself
-# crashes under QEMU emulation with no error output beyond the generic
-# buildx "exit code: 1" -- the log simply stops mid-"Processing triggers for
-# libc-bin". This stage only exists to extract library files for the final
-# stage's COPY (ldconfig's own cache is never used here), so it's safe to
-# turn it into a no-op for this stage alone.
-RUN ln -sf /bin/true /sbin/ldconfig && ln -sf /bin/true /usr/sbin/ldconfig
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Actual root cause (confirmed via the real build log, 2026-09-13, after gh
+# auth + `gh run view --log-failed`): `apt-get install` always runs dpkg's
+# trigger processing at the end, and trigger processing itself (not
+# specifically ldconfig, not apt's seccomp sandbox -- both tried first and
+# neither changed anything) crashes under QEMU user-mode emulation with no
+# error beyond the generic buildx "exit code: 1"; the log consistently stops
+# mid-"Processing triggers for libc-bin". Every individual package's own
+# postinst runs fine under emulation -- only dpkg's trigger machinery itself
+# does not. Fix: never let apt actually install/configure anything here --
+# fetch the .debs only (--download-only) and extract their files directly
+# with dpkg-deb, which is pure archive extraction and never runs a
+# maintainer script or a trigger.
+RUN apt-get update && apt-get install -y --no-install-recommends --download-only \
       libssl3 \
       libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
       python3.11-minimal libpython3.11-minimal libpython3.11-stdlib \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /patched-status \
+    && mkdir -p /patched-status /extracted \
     && for pkg in libssl3 libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
                   python3.11-minimal libpython3.11-minimal libpython3.11-stdlib; do \
-         dpkg -s "$pkg" | grep -v '^Status:' > "/patched-status/$pkg"; \
-         dpkg -L "$pkg" | while read -r f; do \
-           [ -f "$f" ] && printf '%s  %s\n' "$(md5sum "$f" | cut -d' ' -f1)" "${f#/}"; \
-         done > "/patched-status/$pkg.md5sums"; \
+         deb=$(ls /var/cache/apt/archives/${pkg}_*.deb); \
+         dpkg-deb -x "$deb" /extracted; \
+         dpkg-deb -f "$deb" > "/patched-status/$pkg"; \
+         dpkg-deb -e "$deb" "/tmp/ctrl-$pkg"; \
+         cp "/tmp/ctrl-$pkg/md5sums" "/patched-status/$pkg.md5sums"; \
        done
 
 FROM gcr.io/distroless/python3-debian12
@@ -60,10 +59,10 @@ ENV PYTHONPATH=/app/deps
 # status.d records (distroless splits /var/lib/dpkg/status into one file per
 # package) so `trivy image` reports the new version instead of the stale one
 # baked into this base image.
-COPY --from=patch /usr/lib/${DEB_MULTIARCH}/libssl.so.3 /usr/lib/${DEB_MULTIARCH}/libcrypto.so.3 /usr/lib/${DEB_MULTIARCH}/engines-3 /usr/lib/${DEB_MULTIARCH}/ossl-modules /usr/lib/${DEB_MULTIARCH}/
-COPY --from=patch /usr/lib/${DEB_MULTIARCH}/libkrb5.so.3* /usr/lib/${DEB_MULTIARCH}/libk5crypto.so.3* /usr/lib/${DEB_MULTIARCH}/libgssapi_krb5.so.2* /usr/lib/${DEB_MULTIARCH}/libkrb5support.so.0* /usr/lib/${DEB_MULTIARCH}/krb5 /usr/lib/${DEB_MULTIARCH}/
-COPY --from=patch /usr/bin/python3.11 /usr/bin/python3.11
-COPY --from=patch /usr/lib/python3.11 /usr/lib/python3.11
+COPY --from=patch /extracted/usr/lib/${DEB_MULTIARCH}/libssl.so.3 /extracted/usr/lib/${DEB_MULTIARCH}/libcrypto.so.3 /extracted/usr/lib/${DEB_MULTIARCH}/engines-3 /extracted/usr/lib/${DEB_MULTIARCH}/ossl-modules /usr/lib/${DEB_MULTIARCH}/
+COPY --from=patch /extracted/usr/lib/${DEB_MULTIARCH}/libkrb5.so.3* /extracted/usr/lib/${DEB_MULTIARCH}/libk5crypto.so.3* /extracted/usr/lib/${DEB_MULTIARCH}/libgssapi_krb5.so.2* /extracted/usr/lib/${DEB_MULTIARCH}/libkrb5support.so.0* /extracted/usr/lib/${DEB_MULTIARCH}/krb5 /usr/lib/${DEB_MULTIARCH}/
+COPY --from=patch /extracted/usr/bin/python3.11 /usr/bin/python3.11
+COPY --from=patch /extracted/usr/lib/python3.11 /usr/lib/python3.11
 COPY --from=patch /patched-status/. /var/lib/dpkg/status.d/
 
 COPY --from=build /app/deps /app/deps
