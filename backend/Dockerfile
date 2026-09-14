@@ -39,9 +39,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends --download-only
       libssl3 \
       libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
       python3.11-minimal libpython3.11-minimal libpython3.11-stdlib \
+      libexpat1 \
     && mkdir -p /patched-status /extracted \
     && for pkg in libssl3 libkrb5-3 libk5crypto3 libgssapi-krb5-2 libkrb5support0 \
-                  python3.11-minimal libpython3.11-minimal libpython3.11-stdlib; do \
+                  python3.11-minimal libpython3.11-minimal libpython3.11-stdlib \
+                  libexpat1; do \
          deb=$(ls /var/cache/apt/archives/${pkg}_*.deb); \
          dpkg-deb -x "$deb" /extracted; \
          dpkg-deb -f "$deb" > "/patched-status/$pkg"; \
@@ -61,6 +63,7 @@ ENV PYTHONPATH=/app/deps
 # baked into this base image.
 COPY --from=patch /extracted/usr/lib/${DEB_MULTIARCH}/libssl.so.3 /extracted/usr/lib/${DEB_MULTIARCH}/libcrypto.so.3 /extracted/usr/lib/${DEB_MULTIARCH}/engines-3 /extracted/usr/lib/${DEB_MULTIARCH}/ossl-modules /usr/lib/${DEB_MULTIARCH}/
 COPY --from=patch /extracted/usr/lib/${DEB_MULTIARCH}/libkrb5.so.3* /extracted/usr/lib/${DEB_MULTIARCH}/libk5crypto.so.3* /extracted/usr/lib/${DEB_MULTIARCH}/libgssapi_krb5.so.2* /extracted/usr/lib/${DEB_MULTIARCH}/libkrb5support.so.0* /extracted/usr/lib/${DEB_MULTIARCH}/krb5 /usr/lib/${DEB_MULTIARCH}/
+COPY --from=patch /extracted/usr/lib/${DEB_MULTIARCH}/libexpat.so.1* /usr/lib/${DEB_MULTIARCH}/
 COPY --from=patch /extracted/usr/bin/python3.11 /usr/bin/python3.11
 COPY --from=patch /extracted/usr/lib/python3.11 /usr/lib/python3.11
 COPY --from=patch /patched-status/. /var/lib/dpkg/status.d/
