@@ -108,28 +108,29 @@ jobs:
           docker push ${{ steps.image.outputs.name }}:latest
 
   update-infra:
-    name: Bump image tag in dashboard-cloud-infra
+    name: Bump image tag in tools-infra (tools/dashboard-cloud)
     needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Checkout dashboard-cloud-infra
+      # Manifests live in the tools-infra monorepo (tools/dashboard-cloud).
+      # Secret TOOLS_INFRA_TOKEN: fine-grained PAT with write access ONLY to
+      # tools-infra (same token in every app code repo).
+      - name: Checkout tools-infra
         uses: actions/checkout@v4
         with:
-          repository: felipe-e-ribeiro/dashboard-cloud-infra
-          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          repository: felipe-e-ribeiro/tools-infra
+          token: ${{ secrets.TOOLS_INFRA_TOKEN }}
 
-      # dashboard-cloud-infra consumes platform-chart as a dependency (migrated
-      # from the old bespoke chart on 2026-09-13) -- image tags live nested
-      # under the "platform-chart" key in values.yaml, not Chart.yaml's
-      # appVersion (that key has a literal hyphen, hence the bracket path).
-      - name: Bump image tags in values.yaml
+      # Image tags live nested under the "platform-chart" key (literal
+      # hyphen, hence the bracket path).
+      - name: Bump image tags in tools/dashboard-cloud/values.yaml
         env:
           TAG: ${{ github.ref_name }}
         run: |
           yq -i '.["platform-chart"].api.image.tag = strenv(TAG)
-               | .["platform-chart"].frontend.image.tag = strenv(TAG)' values.yaml
+               | .["platform-chart"].frontend.image.tag = strenv(TAG)' tools/dashboard-cloud/values.yaml
 
       - name: Commit and push
         env:
@@ -137,7 +138,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add values.yaml
+          git add tools/dashboard-cloud/values.yaml
           git diff --staged --quiet && { echo "No changes to commit"; exit 0; }
-          git commit -m "chore: bump image tag to ${TAG}"
-          git push
+          git commit -m "chore(dashboard-cloud): bump image tag to ${TAG}"
+          for attempt in 1 2 3; do
+            git push && exit 0
+            echo "push recusado (outro CD gravou no tools-infra); rebase e nova tentativa"
+            git pull --rebase
+          done
+          exit 1
